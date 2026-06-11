@@ -1,0 +1,6 @@
+@StemCellsPro.Api_HostAddress = http://localhost:5183
+
+GET {{StemCellsPro.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

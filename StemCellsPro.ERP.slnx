@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="StemCellsPro.Api/StemCellsPro.Api.csproj" />
+  <Project Path="StemCellsPro.Application/StemCellsPro.Application.csproj" />
+  <Project Path="StemCellsPro.Domain/StemCellsPro.Domain.csproj" />
+  <Project Path="StemCellsPro.Infrastructure/StemCellsPro.Infrastructure.csproj" />
+  <Project Path="StemCellsPro.Shared/StemCellsPro.Shared.csproj" />
+</Solution>
