@@ -19,7 +19,7 @@ public class DapperContext
                             ?? throw new Exception("DefaultConnection missing in appsettings");
     }
 
-    public IDbConnection CreateConnection(bool useMaster = false)
+    public IDbConnection CreateConnection(bool useMaster = false) //master- apicalldb 
     {
         if (useMaster)
         {

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\StemCellsPro.Domain\StemCellsPro.Domain.csproj" />
+    <ProjectReference Include="..\StemCellsPro.Shared\StemCellsPro.Shared.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

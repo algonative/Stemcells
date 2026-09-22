@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using StemCellsPro.Application.DTOs;
 using StemCellsPro.Application.Interfaces;
 using StemCellsPro.Shared.Responses;
@@ -14,6 +15,7 @@ public class AuthController : BaseController
         _authService = authService;
     }
 
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
@@ -24,5 +26,6 @@ public class AuthController : BaseController
 
         var response = await _authService.LoginAsync(request);
         return Ok(new ApiResponse<LoginResponseDto>(response, "Login successful"));
+
     }
 }

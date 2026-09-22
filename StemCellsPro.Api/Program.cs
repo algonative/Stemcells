@@ -1,4 +1,7 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.OpenApi;
+using StemCellsPro.Api.Authentication;
 using StemCellsPro.Api.Middlewares;
 using StemCellsPro.Application.Interfaces;
 using StemCellsPro.Infrastructure.Data;
@@ -10,7 +13,42 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "Opaque",
+        In = ParameterLocation.Header,
+        Description = "Enter the APICallDB token as: Bearer {token}"
+    });
+
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+    });
+});
+
+builder.Services
+    .AddAuthentication(ApiTokenAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, ApiTokenAuthenticationHandler>(
+        ApiTokenAuthenticationHandler.SchemeName,
+        options => { });
+
+builder.Services.AddAuthorization();
+
+// Enable CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
 
 // --- ENTERPRISE FEATURES ---
 
@@ -34,12 +72,8 @@ builder.Services.AddApiVersioning(options =>
 builder.Services.AddHealthChecks()
     .AddSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") ?? "");
 
-// 3. Redis Distributed Caching
-builder.Services.AddStackExchangeRedisCache(options =>
-{
-    options.Configuration = builder.Configuration.GetConnectionString("RedisConnection");
-    options.InstanceName = "ERP_";
-});
+// 3. In-Memory Distributed Caching (Replaced Redis for local development)
+builder.Services.AddDistributedMemoryCache();
 
 // 4. Hangfire Background Jobs
 //builder.Services.AddHangfire(config => config
@@ -70,15 +104,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Enable CORS before custom middlewares
+app.UseCors("AllowAll");
+
 // Global Exception Handler
 app.UseMiddleware<ExceptionMiddleware>();
 
 // Tenant Resolver Middleware
 app.UseMiddleware<TenantMiddleware>();
 
-// Custom Authentication Middleware
-app.UseMiddleware<CustomAuthMiddleware>();
-
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Health Check Endpoint

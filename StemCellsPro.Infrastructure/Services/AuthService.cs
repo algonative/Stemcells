@@ -42,20 +42,19 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponseDto> LoginAsync(LoginRequestDto request)
     {
-        // 1. Call existing SP to check credentials
+        // 1. App-Level Authentication against APICallDB
+        // Use system credentials to retrieve the routing token for the provided AppID
         var query = "exec [sp_LoginCheck] @Login, @Password, @AppID";
         using var connection = _context.CreateConnection(useMaster: true);
         
-        // Simulating the DataSet return from the legacy code
-        // In Dapper, we can read multiple result sets if the SP returns multiple tables.
-        using var multi = await connection.QueryMultipleAsync(query, new { request.Login, request.Password, request.AppID });
+        using var multi = await connection.QueryMultipleAsync(query, new { Login = "admin", Password = "12345", AppID = request.AppID });
         
         var firstTable = await multi.ReadAsync<string>();
         var status = firstTable.FirstOrDefault();
 
         if (status == "0")
         {
-            throw new UnauthorizedException("Invalid login details.");
+            throw new UnauthorizedException("Failed to authenticate application against Master DB.");
         }
         
         var secondTable = await multi.ReadAsync<string>();
@@ -63,7 +62,33 @@ public class AuthService : IAuthService
 
         if (string.IsNullOrEmpty(token))
         {
-            throw new AppException("Token generation failed in the database.");
+            throw new AppException("Token generation failed in the APICallDB.");
+        }
+
+        // 2. Resolve the Tenant AppDb Connection String
+        var dbConnectionString = await GetDbConnectionStringAsync(token);
+        if (string.IsNullOrEmpty(dbConnectionString))
+        {
+            throw new AppException("Could not resolve Tenant Database connection string from token.");
+        }
+
+        // 3. User-Level Authentication against AppDb
+        using var tenantConnection = new Microsoft.Data.SqlClient.SqlConnection(dbConnectionString);
+        
+        var userQuery = @"SELECT UserId AS Id, Username, FullName, Email, IsActive 
+                          FROM [dbo].[ApplicationUsers] 
+                          WHERE Username = @Username 
+                            AND PasswordHash = CONVERT(NVARCHAR(500), HASHBYTES('SHA2_256', CAST(@Password AS VARCHAR(500))), 2) 
+                            AND IsActive = 1";
+                            
+        var user = await tenantConnection.QueryFirstOrDefaultAsync<StemCellsPro.Domain.Entities.User>(
+            userQuery,
+            new { Username = request.Login, Password = request.Password }
+        );
+
+        if (user == null)
+        {
+            throw new UnauthorizedException("Invalid username or password.");
         }
 
         return new LoginResponseDto
@@ -71,7 +96,7 @@ public class AuthService : IAuthService
             Success = true,
             Message = "Login successful.",
             Token = token,
-            UserId = 1 // Replace with actual parsing if SP returns it
+            UserId = user.Id
         };
     }
 
@@ -79,7 +104,19 @@ public class AuthService : IAuthService
     {
         var query = "exec [sp_ValidateToken] @Token";
         using var connection = _context.CreateConnection(useMaster: true);
-        var dbToken = await connection.ExecuteScalarAsync<string>(query, new { Token = token });
-        return dbToken == token;
+        var dbToken = await connection.ExecuteScalarAsync<object>(query, new { Token = token });
+        
+        if (dbToken == null || dbToken == DBNull.Value) return false;
+        
+        var resultStr = dbToken.ToString();
+        if (string.IsNullOrEmpty(resultStr)) return false;
+        
+        // If the SP returns the token itself
+        if (resultStr == token) return true;
+        
+        // If the SP returns a BIT or INT 1 (success)
+        if (resultStr == "1" || resultStr.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
+        
+        return false;
     }
 }

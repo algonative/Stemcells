@@ -3,13 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using StemCellsPro.Application.Interfaces;
 using StemCellsPro.Shared.Requests;
 using StemCellsPro.Shared.Responses;
-using System.Data;
+using System.Security.Claims;
 
 namespace StemCellsPro.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-[Authorize] // Handled by CustomAuthMiddleware
+[Authorize] // Requires a valid ApiToken bearer token.
 public class DataController : ControllerBase
 {
     private readonly IFormDataRepository _formDataRepository;
@@ -23,54 +23,80 @@ public class DataController : ControllerBase
     public async Task<IActionResult> AddData([FromBody] AddFormRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.FormName))
-            return BadRequest(new ApiResponse<object>(null, "Form Name is missing.") { Success = false });
+            return BadRequest(new ApiResponse<object>("Form Name is missing."));
 
-        if (string.IsNullOrWhiteSpace(request.UserName))
-            return BadRequest(new ApiResponse<object>(null, "User Name is missing.") { Success = false });
+        var userName = GetCurrentUserName(request.UserName);
+        if (string.IsNullOrWhiteSpace(userName))
+            return Unauthorized(new ApiResponse<object>("Unable to resolve the current user."));
 
-        var result = await _formDataRepository.AddFormAsync(request.FormName, request.UserName, request.FormData, request.Attachments);
+        var result = await _formDataRepository.AddFormAsync(request.FormName, userName, request.FormData, request.Attachments);
 
-        return Ok(new ApiResponse<int>(result, "Form data saved successfully."));
+        return Ok(result);
     }
 
-    [HttpDelete("delete-form/{id}")]
-    public async Task<IActionResult> DeleteData(int id)
+    [HttpPut("update-form/{formName}/{id:int}")]
+    public async Task<IActionResult> UpdateData(string formName, int id, [FromBody] AddFormRequest request)
     {
-        var result = await _formDataRepository.DeleteFormAsync(id);
+        if (string.IsNullOrWhiteSpace(formName))
+            return BadRequest(new ApiResponse<object>("Form Name is missing."));
+
+        var userName = GetCurrentUserName(request.UserName);
+        if (string.IsNullOrWhiteSpace(userName))
+            return Unauthorized(new ApiResponse<object>("Unable to resolve the current user."));
+
+        var result = await _formDataRepository.UpdateFormAsync(formName, id, userName, request.FormData, request.Attachments);
+
+        return Ok(result);
+    }
+
+    [HttpDelete("delete-form/{formName}/{id:int}")]
+    public async Task<IActionResult> DeleteData(string formName, int id, [FromQuery] string userName = "")
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+            return BadRequest(new ApiResponse<object>("Form Name is missing."));
+
+        var currentUser = GetCurrentUserName(userName);
+        if (string.IsNullOrWhiteSpace(currentUser))
+            return Unauthorized(new ApiResponse<object>("Unable to resolve the current user."));
+
+        var result = await _formDataRepository.DeleteFormAsync(formName, id, currentUser);
 
         if (result == 0)
-            return NotFound(new ApiResponse<object>(null, "Form data not found.") { Success = false });
+            return NotFound(new ApiResponse<object>("Form data not found."));
 
         return Ok(new ApiResponse<int>(result, $"Form data with Id {id} deleted successfully."));
     }
 
-    [HttpPost("get-data")]
-    public async Task<IActionResult> GetData([FromBody] GetFormDataRequest request)
+    [HttpDelete("delete-form/{id:int}")]
+    public IActionResult DeleteDataWithoutFormName(int id)
     {
-        if (string.IsNullOrWhiteSpace(request.Query))
-            return BadRequest(new ApiResponse<object>(null, "Query is missing.") { Success = false });
+        return BadRequest(new ApiResponse<object>(
+            "Form Name is required. Use DELETE /api/Data/delete-form/{formName}/{id}.")
+        );
+    }
 
-        try
-        {
-            var dataTable = await _formDataRepository.GetFormDataAsync(request.Query);
-            
-            // Convert DataTable to List of Dictionaries for System.Text.Json compatibility
-            var resultList = new List<Dictionary<string, object>>();
-            foreach (DataRow row in dataTable.Rows)
-            {
-                var dict = new Dictionary<string, object>();
-                foreach (DataColumn col in dataTable.Columns)
-                {
-                    dict[col.ColumnName] = row[col] == DBNull.Value ? null : row[col];
-                }
-                resultList.Add(dict);
-            }
+    [HttpPost("search")]
+    [HttpPost("get-data")]
+    public async Task<IActionResult> GetData([FromBody] FormSearchRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FormName))
+            return BadRequest(new ApiResponse<object>("Form Name is missing."));
 
-            return Ok(new ApiResponse<List<Dictionary<string, object>>>(resultList, "Data fetched successfully."));
-        }
-        catch (Exception ex)
+        var result = await _formDataRepository.SearchFormDataAsync(request);
+
+        return Ok(result);
+    }
+
+    private string GetCurrentUserName(string fallbackUserName)
+    {
+        var candidates = new[]
         {
-            return BadRequest(new ApiResponse<object>(null, $"Error executing query: {ex.Message}") { Success = false });
-        }
+            User.FindFirst(ClaimTypes.Name)?.Value,
+            User.FindFirst("UserName")?.Value,
+            User.Identity?.Name,
+            fallbackUserName
+        };
+
+        return candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
     }
 }

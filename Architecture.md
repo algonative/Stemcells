@@ -36,12 +36,18 @@ The project follows **Clean Architecture** (also known as Onion Architecture). T
 - For basic CRUD operations, consider using `Dapper.Contrib` or writing a reflection-based generic SQL generator in `GenericRepository`.
 
 ## 4. Custom Authentication
-- Instead of JWT, we use a database-backed custom token system for strict auditing.
-- `CustomAuthMiddleware` intercepts requests, extracts the token from the `Authorization` header, and calls `IAuthService.ValidateTokenAsync` against the database.
-- It bypasses validation for login routes.
-- Once validated, it injects Claims into `HttpContext.User`.
+- Instead of JWT, we use a database-backed opaque token system for strict auditing and server-side revocation.
+- `ApiTokenAuthenticationHandler` extracts the bearer token from the `Authorization` header, calls `IAuthService.ValidateTokenAsync` against APICallDB, resolves the tenant AppDB connection string, and stores it in `ITenantService` for the current request.
+- Login routes must be marked with `[AllowAnonymous]`.
+- Protected endpoints use standard ASP.NET Core `[Authorize]` attributes and authorization policies.
 
-## 5. Adding Future ERP Modules (HRMS, Payroll, Inventory)
+## 5. Generic Form Operations
+- Generic form endpoints are appropriate for metadata-driven forms, master data, and simple configurable ERP/BRSR data entry.
+- The API must never accept raw SQL from a client. Query operations should use `FormSearchRequest` with `FormName`, paging, sorting, and whitelisted filters.
+- The repository must validate `FormName` against `form_defs`, validate requested columns against the real table schema, parameterize values, and enforce a maximum page size.
+- Build explicit controllers/services for workflows with business rules, approvals, calculations, reports, document lifecycle, permissions, or cross-module side effects.
+
+## 6. Adding Future ERP Modules (HRMS, Payroll, Inventory)
 When building new modules, follow a **Vertical Slice / Modular Approach** within the Clean Architecture boundaries:
 
 ### Example: Adding HRMS (Leave Management)
@@ -56,12 +62,12 @@ When building new modules, follow a **Vertical Slice / Modular Approach** within
    - Create `LeaveController` in `StemCellsPro.Api/Controllers/HRMS/`.
    - Register dependencies in `Program.cs` or an Extension method like `services.AddHrmsModule()`.
 
-## 6. Exception Handling and Responses
+## 7. Exception Handling and Responses
 - **NEVER** throw raw exceptions to the client.
 - **ALWAYS** use `ApiResponse<T>`.
 - Use custom exceptions (`AppException`, `UnauthorizedException`) in Application/Domain layers. The `ExceptionMiddleware` will catch these and automatically format them into a standard HTTP 400 or 401 `ApiResponse`.
 
-## 7. Best Practices
+## 8. Best Practices
 - **Dependency Injection**: Always inject interfaces (`IUserService`), never concrete classes.
 - **Async All The Way**: Use `async`/`await` for all I/O operations (Database, Network, File).
 - **Validation**: Validate DTOs in the Application layer (consider using FluentValidation).
