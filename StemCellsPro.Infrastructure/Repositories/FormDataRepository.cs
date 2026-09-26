@@ -508,6 +508,29 @@ public class FormDataRepository : IFormDataRepository
            columnName.Equals("ModifiedOn", StringComparison.OrdinalIgnoreCase) ||
            columnName.Equals("ModifiedBy", StringComparison.OrdinalIgnoreCase);
 
+    public async Task<IReadOnlyList<Dictionary<string, object?>>> GetAuditTrailAsync(string formName, int id)
+    {
+        using var connection = _context.CreateConnection();
+        var parameters = new DynamicParameters();
+        parameters.Add("@FormName", formName, DbType.String);
+        parameters.Add("@RecordId", id, DbType.Int32);
+
+        var rawRows = await connection.QueryAsync<dynamic>(
+            "sp_GetFormAuditTrail",
+            parameters,
+            commandType: CommandType.StoredProcedure
+        );
+
+        var result = new List<Dictionary<string, object?>>();
+        foreach (var row in rawRows)
+        {
+            var dict = (IDictionary<string, object?>)row;
+            result.Add(new Dictionary<string, object?>(dict));
+        }
+
+        return result;
+    }
+
     private static string InferSystemFieldType(string columnName)
         => columnName.Equals("Active", StringComparison.OrdinalIgnoreCase)
             ? "BIT"

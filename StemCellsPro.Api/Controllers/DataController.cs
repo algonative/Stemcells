@@ -75,6 +75,17 @@ public class DataController : ControllerBase
         );
     }
 
+    [HttpGet("audit-trail/{formName}/{id:int}")]
+    public async Task<IActionResult> GetAuditTrail(string formName, int id)
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+            return BadRequest(new ApiResponse<object>("Form Name is missing."));
+
+        var result = await _formDataRepository.GetAuditTrailAsync(formName, id);
+
+        return Ok(new ApiResponse<IReadOnlyList<Dictionary<string, object?>>>(result));
+    }
+
     [HttpPost("search")]
     [HttpPost("get-data")]
     public async Task<IActionResult> GetData([FromBody] FormSearchRequest request)
