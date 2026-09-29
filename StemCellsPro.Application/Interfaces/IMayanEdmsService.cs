@@ -1,7 +1,12 @@
-namespace StemCellsPro.Application.Interfaces;
+using System.Threading.Tasks;
 
-public interface IMayanEdmsService
+namespace StemCellsPro.Application.Interfaces
 {
-    Task<string> UploadDocumentAsync(string fileName, byte[] fileData, string contentType, int documentTypeId = 1);
-    Task<(byte[] FileBytes, string FileName, string MimeType)> DownloadDocumentAsync(string documentId);
+    public interface IMayanEdmsService
+    {
+        Task<string> UploadDocumentAsync(string fileName, byte[] fileData, string contentType, int documentTypeId = 1);
+        Task<(byte[] FileBytes, string FileName, string MimeType)> DownloadDocumentAsync(string documentId);
+        Task<string> UploadDocumentToSourceAsync(string fileName, byte[] fileData, string contentType);
+        Task DeleteDocumentAsync(string mayanDocumentId);
+    }
 }

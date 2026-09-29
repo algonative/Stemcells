@@ -69,8 +69,13 @@ builder.Services.AddApiVersioning(options =>
 });
 
 // 2. Health Checks
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(defaultConnection))
+{
+    throw new InvalidOperationException("The connection string 'DefaultConnection' was not found or is empty. Please check your configuration.");
+}
 builder.Services.AddHealthChecks()
-    .AddSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") ?? "");
+    .AddSqlServer(defaultConnection);
 
 // 3. In-Memory Distributed Caching (Replaced Redis for local development)
 builder.Services.AddDistributedMemoryCache();
@@ -90,13 +95,15 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<ICacheService, RedisCacheService>();
 builder.Services.AddScoped<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<IFormDataRepository, FormDataRepository>();
+builder.Services.AddScoped<IAttachmentsRepository, AttachmentsRepository>();
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+var enableSwagger = builder.Configuration.GetValue<bool>("EnableSwagger");
+if (enableSwagger)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -125,3 +132,5 @@ app.MapHealthChecks("/api/health");
 app.MapControllers();
 
 app.Run();
+
+

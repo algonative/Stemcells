@@ -119,4 +119,11 @@ public class AuthService : IAuthService
         
         return false;
     }
+
+    public async Task LogoutAsync(string token)
+    {
+        var query = "exec [sp_revoketoken_logout] @Token";
+        using var connection = _context.CreateConnection(useMaster: true);
+        await connection.ExecuteAsync(query, new { Token = token });
+    }
 }

@@ -26,6 +26,17 @@ public class AuthController : BaseController
 
         var response = await _authService.LoginAsync(request);
         return Ok(new ApiResponse<LoginResponseDto>(response, "Login successful"));
+    }
 
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+        if (authHeader != null && authHeader.StartsWith("Bearer "))
+        {
+            var token = authHeader.Substring("Bearer ".Length).Trim();
+            await _authService.LogoutAsync(token);
+        }
+        return Ok(new ApiResponse<string>(null, "Logout successful"));
     }
 }
